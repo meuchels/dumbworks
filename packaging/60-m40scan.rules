@@ -1,0 +1,3 @@
+# Colortrac SmartLF M-series scanner (Canon iPF MFP M40): let logged-in users use it.
+# Copy to /etc/udev/rules.d/, then: sudo udevadm control --reload-rules && sudo udevadm trigger
+SUBSYSTEM=="usb", ATTR{idVendor}=="148c", ATTR{idProduct}=="0060", MODE="0666", TAG+="uaccess"
