@@ -20,7 +20,7 @@ how the original Windows software talks to the scanner; see [docs/PROTOCOL.md](d
 
 ## Running
 
-Download `m40scan-x86_64` from Releases (or build it, below), then:
+Download `m40scan-x86_64` from [Releases](../../releases) (or build it, below), then:
 
 ```sh
 chmod +x m40scan-x86_64
@@ -52,7 +52,8 @@ packaging/build.sh      # -> dist/m40scan-x86_64
 ```
 
 The script downloads micromamba and a conda-forge Python, then bundles everything with
-PyInstaller. Libraries from the build machine's `/usr` are left out so the result runs
+PyInstaller. GitHub Actions runs it on every push (download from the run's Artifacts),
+and pushing a tag such as `v0.2.0` publishes a Release with the executable attached. Libraries from the build machine's `/usr` are left out so the result runs
 on old and new distributions alike.
 
 ## Layout
