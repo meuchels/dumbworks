@@ -219,16 +219,17 @@ def run_gui():
                          width=16, font=FONT).pack(side="left", ipady=6)
             ttk.Checkbutton(top2, text="Auto straighten", variable=self.auto).pack(side="left", padx=(0, 20))
             ttk.Button(top2, text="Reset adjustments", command=self.on_reset).pack(side="left", padx=(0, 8))
-            ttk.Button(top2, text="Save as default", command=self.on_save_defaults).pack(side="left", padx=(0, 20))
-            ttk.Checkbutton(top2, text="Batch (no preview)",
-                            variable=self.quick).pack(side="left", padx=4)
+            ttk.Button(top2, text="Save as default", command=self.on_save_defaults).pack(side="left", padx=(0, 8))
+            ttk.Button(top2, text="Load defaults", command=self.on_load_defaults).pack(side="left", padx=(0, 20))
+            ttk.Checkbutton(top, text="Batch (no preview)", variable=self.quick).pack(side="left", padx=(20, 0))
             mb = ttk.Menubutton(top, text="Setup", style="Big.TMenubutton")
             menu = tk.Menu(mb, tearoff=False, font=FONT)
             menu.add_command(label="Fix USB permission (asks for admin password)", command=self.on_fix_perm)
             menu.add_command(label="Add to applications menu", command=self.on_menu_entry)
             menu.add_separator()
             menu.add_command(label="Save current settings as default", command=self.on_save_defaults)
-            menu.add_command(label="Restore factory defaults", command=self.on_factory_defaults)
+            menu.add_command(label="Load my saved defaults", command=self.on_load_defaults)
+            menu.add_command(label="Load factory settings", command=self.on_factory_defaults)
             mb["menu"] = menu
             mb.pack(side="right")
             ttk.Button(top2, text="+", width=3, command=lambda: self.bump_margin(0.1)).pack(side="right")
@@ -432,25 +433,34 @@ def run_gui():
             self.settings = new
             self.status.set(f"Defaults saved ({path}).")
 
-        def on_factory_defaults(self):
-            if not messagebox.askyesno(APP_TITLE, "Restore the original factory settings and forget your "
-                                       "saved defaults?"):
+        def apply_settings(self, st):
+            """Put a set of settings into the controls and the current adjustments."""
+            self.res.set(RES_LABELS[RES_VALUES.index(st["resolution"])]
+                         if st["resolution"] in RES_VALUES else RES_LABELS[1])
+            self.auto.set(bool(st["auto_straighten"]))
+            self.quick.set(bool(st["batch"]))
+            self.margin.set(float(st["margin"]))
+            self.margin_text.set(f"{float(st['margin']):.1f}")
+            self.fmt.set(st["format"] if st["format"] in dict(FORMATS) else "PDF")
+            self.folder.set(st["folder"] or default_folder())
+            for k in TONE_KEYS:
+                setattr(self.adj, k, int(st[k]))
+            self.filename.set(next_name(self.folder.get(), dict(FORMATS)[self.fmt.get()]))
+            self.changed() if self.raw is not None else self.update_panel()
+
+        def on_load_defaults(self):
+            if not os.path.exists(config_path()):
+                messagebox.showinfo(APP_TITLE, "You haven't saved any defaults yet. Set things up, then "
+                                    "use Save as default.")
                 return
-            try:
-                os.remove(config_path())
-            except OSError:
-                pass
-            self.settings = dict(FACTORY)
-            st = self.settings
-            self.res.set(RES_LABELS[RES_VALUES.index(st["resolution"])])
-            self.auto.set(st["auto_straighten"])
-            self.quick.set(st["batch"])
-            self.margin.set(st["margin"])
-            self.margin_text.set(f"{st['margin']:.1f}")
-            self.fmt.set(st["format"])
-            self.folder.set(default_folder())
-            self.on_reset()
-            self.status.set("Factory defaults restored.")
+            self.settings = load_settings()
+            self.apply_settings(self.settings)
+            self.status.set("Your saved defaults are loaded.")
+
+        def on_factory_defaults(self):
+            self.apply_settings(FACTORY)
+            self.status.set("Factory settings loaded. Your saved defaults are unchanged; "
+                            "use Save as default to replace them.")
 
         def on_reset(self):
             auto = self.adj.auto

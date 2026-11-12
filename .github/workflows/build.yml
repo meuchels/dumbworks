@@ -14,7 +14,8 @@ permissions:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    # Pinned: the build env comes from conda-forge, so the host OS only needs to be stable.
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v6
 

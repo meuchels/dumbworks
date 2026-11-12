@@ -18,7 +18,9 @@ how the original Windows software talks to the scanner; see [docs/PROTOCOL.md](d
 - Large, touch-friendly controls; drag to pan when zoomed in
 - **Save as default** remembers resolution, format, folder, edge margin, auto-straighten,
   batch mode and the brightness/white/black/sharpening levels
-  (stored in `~/.config/dumbworks/settings.json`; the command line uses them too)
+  (stored in `~/.config/dumbworks/settings.json`; the command line uses them too).
+  **Load defaults** brings them back after experimenting; *Setup → Load factory settings*
+  switches to the original values without erasing your saved defaults
 - Command-line mode for scripting
 
 ## Running
