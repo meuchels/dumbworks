@@ -104,6 +104,42 @@ def next_name(folder, ext):
         n += 1
 
 
+# ---------------------------------------------------------------------------
+# saved defaults (~/.config/dumbworks/settings.json)
+# ---------------------------------------------------------------------------
+FACTORY = dict(resolution=200, auto_straighten=True, batch=False, margin=0.5, format="PDF",
+               folder="", brightness=0, white=1, black=5, sharpen=2)
+TONE_KEYS = ("brightness", "white", "black", "sharpen")
+
+
+def config_path():
+    base = os.environ.get("XDG_CONFIG_HOME") or os.path.join(os.path.expanduser("~"), ".config")
+    return os.path.join(base, "dumbworks", "settings.json")
+
+
+def load_settings():
+    import json
+    s = dict(FACTORY)
+    try:
+        with open(config_path()) as f:
+            saved = json.load(f)
+        s.update({k: v for k, v in saved.items() if k in FACTORY})
+    except (OSError, ValueError):
+        pass
+    return s
+
+
+def save_settings(s):
+    import json
+    path = config_path()
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    tmp = path + ".tmp"
+    with open(tmp, "w") as f:
+        json.dump({k: s[k] for k in FACTORY}, f, indent=2)
+    os.replace(tmp, path)
+    return path
+
+
 def run_gui():
     import tkinter as tk
     from tkinter import filedialog, messagebox, ttk
@@ -124,7 +160,8 @@ def run_gui():
             self.worker = None
             self.raw = None            # full-resolution scan
             self.proxy = None          # reduced copy for fast preview
-            self.adj = m40_edit.Adjust()
+            self.settings = load_settings()
+            self.adj = self.default_adjust()
             self.saved = True
             self.zoom = 1.0
             self.crop_mode = False
@@ -134,17 +171,19 @@ def run_gui():
             self._geom_img = None
             self._tk_img = None
 
-            self.folder = tk.StringVar(value=default_folder())
-            self.fmt = tk.StringVar(value="PDF")
-            self.margin = tk.DoubleVar(value=0.5)
-            self.margin_text = tk.StringVar(value="0.5")
-            self.res = tk.StringVar(value=RES_LABELS[1])
+            st = self.settings
+            self.folder = tk.StringVar(value=st["folder"] or default_folder())
+            self.fmt = tk.StringVar(value=st["format"] if st["format"] in dict(FORMATS) else "PDF")
+            self.margin = tk.DoubleVar(value=float(st["margin"]))
+            self.margin_text = tk.StringVar(value=f"{float(st['margin']):.1f}")
+            self.res = tk.StringVar(value=RES_LABELS[RES_VALUES.index(st["resolution"])]
+                                    if st["resolution"] in RES_VALUES else RES_LABELS[1])
             self.raw_dpi = 200
-            self.auto = tk.BooleanVar(value=True)
-            self.quick = tk.BooleanVar(value=False)
-            self.quick_on = False
+            self.auto = tk.BooleanVar(value=bool(st["auto_straighten"]))
+            self.quick = tk.BooleanVar(value=bool(st["batch"]))
+            self.quick_on = bool(st["batch"])
             self.quick.trace_add("write", lambda *_: setattr(self, "quick_on", bool(self.quick.get())))
-            self.filename = tk.StringVar(value=next_name(self.folder.get(), "pdf"))
+            self.filename = tk.StringVar(value=next_name(self.folder.get(), dict(FORMATS)[self.fmt.get()]))
             self.status = tk.StringVar(value="Ready. Press Scan, then feed a page.")
 
             self.build_toolbar()
@@ -179,13 +218,17 @@ def run_gui():
             ttk.Combobox(top, textvariable=self.res, values=RES_LABELS, state="readonly",
                          width=16, font=FONT).pack(side="left", ipady=6)
             ttk.Checkbutton(top2, text="Auto straighten", variable=self.auto).pack(side="left", padx=(0, 20))
-            ttk.Button(top2, text="Reset adjustments", command=self.on_reset).pack(side="left", padx=(0, 20))
+            ttk.Button(top2, text="Reset adjustments", command=self.on_reset).pack(side="left", padx=(0, 8))
+            ttk.Button(top2, text="Save as default", command=self.on_save_defaults).pack(side="left", padx=(0, 20))
             ttk.Checkbutton(top2, text="Batch (no preview)",
                             variable=self.quick).pack(side="left", padx=4)
             mb = ttk.Menubutton(top, text="Setup", style="Big.TMenubutton")
             menu = tk.Menu(mb, tearoff=False, font=FONT)
             menu.add_command(label="Fix USB permission (asks for admin password)", command=self.on_fix_perm)
             menu.add_command(label="Add to applications menu", command=self.on_menu_entry)
+            menu.add_separator()
+            menu.add_command(label="Save current settings as default", command=self.on_save_defaults)
+            menu.add_command(label="Restore factory defaults", command=self.on_factory_defaults)
             mb["menu"] = menu
             mb.pack(side="right")
             ttk.Button(top2, text="+", width=3, command=lambda: self.bump_margin(0.1)).pack(side="right")
@@ -355,9 +398,63 @@ def run_gui():
             self.adj.box = (0.0, 0.0, 1.0, 1.0)
             self.changed()
 
+        def default_adjust(self, **kw):
+            return m40_edit.Adjust(**{k: int(self.settings[k]) for k in TONE_KEYS}, **kw)
+
+        def current_settings(self):
+            try:
+                margin = round(float(self.margin.get()), 1)
+            except (tk.TclError, ValueError):
+                margin = FACTORY["margin"]
+            s = dict(resolution=RES_VALUES[RES_LABELS.index(self.res.get())],
+                     auto_straighten=bool(self.auto.get()), batch=bool(self.quick.get()),
+                     margin=margin, format=self.fmt.get(), folder=self.folder.get())
+            s.update({k: getattr(self.adj, k) for k in TONE_KEYS})
+            return s
+
+        def on_save_defaults(self):
+            new = self.current_settings()
+            if not messagebox.askyesno(
+                    APP_TITLE, "Save these as the defaults used every time the app starts?\n\n"
+                    f"Resolution: {new['resolution']} dpi\n"
+                    f"Auto straighten: {'on' if new['auto_straighten'] else 'off'}    "
+                    f"Batch: {'on' if new['batch'] else 'off'}\n"
+                    f"Edge margin: {new['margin']:.1f} in\n"
+                    f"Format: {new['format']}\nFolder: {new['folder']}\n"
+                    f"Brightness {new['brightness']}, White point {new['white']}, "
+                    f"Black point {new['black']}, Sharpening {new['sharpen']}"):
+                return
+            try:
+                path = save_settings(new)
+            except OSError as e:
+                messagebox.showerror(APP_TITLE, f"Could not save the defaults: {e}")
+                return
+            self.settings = new
+            self.status.set(f"Defaults saved ({path}).")
+
+        def on_factory_defaults(self):
+            if not messagebox.askyesno(APP_TITLE, "Restore the original factory settings and forget your "
+                                       "saved defaults?"):
+                return
+            try:
+                os.remove(config_path())
+            except OSError:
+                pass
+            self.settings = dict(FACTORY)
+            st = self.settings
+            self.res.set(RES_LABELS[RES_VALUES.index(st["resolution"])])
+            self.auto.set(st["auto_straighten"])
+            self.quick.set(st["batch"])
+            self.margin.set(st["margin"])
+            self.margin_text.set(f"{st['margin']:.1f}")
+            self.fmt.set(st["format"])
+            self.folder.set(default_folder())
+            self.on_reset()
+            self.status.set("Factory defaults restored.")
+
         def on_reset(self):
             auto = self.adj.auto
-            self.adj = m40_edit.Adjust(auto=auto)
+            self.adj = self.default_adjust(auto=auto)
             if auto:
                 self.adj.angle, self.adj.box = auto["angle"], auto["box"]
             self.changed()
@@ -450,7 +547,7 @@ def run_gui():
             f = min(1.0, 1600 / max(img.size))
             self.proxy = img if f >= 1 else img.resize((int(img.width * f), int(img.height * f)), Image.BILINEAR)
             self.proxy_scale = f
-            self.adj = m40_edit.Adjust()
+            self.adj = self.default_adjust()
             self._geom_key = None
             self.crop_mode = False
             self.zoom = 1.0
@@ -489,7 +586,8 @@ def run_gui():
                 self.busy(False)
                 return
             opts = dict(margin=margin, dpi=dpi, folder=self.folder.get() or default_folder(),
-                        ext=dict(FORMATS)[self.fmt.get()], auto=self.auto.get())
+                        ext=dict(FORMATS)[self.fmt.get()], auto=self.auto.get(),
+                        adjust=self.default_adjust())
             self.worker = threading.Thread(target=self.work, args=(opts,), daemon=True)
             self.worker.start()
 
@@ -513,7 +611,7 @@ def run_gui():
                         put(("scan", (img, dpi)))
                         break
                     # batch mode: default adjustments, auto straighten, save, next page
-                    a = m40_edit.Adjust()
+                    a = m40_edit.Adjust(**{**o["adjust"].__dict__})
                     if o["auto"]:
                         a.angle, a.box = analyze(img)
                     out = m40_edit.apply(img, a, dpi)
@@ -670,9 +768,12 @@ def run_cli(argv):
     from PIL import Image
     ap = argparse.ArgumentParser(prog="m40scan scan", description="Scan one page from the SmartLF M40 scanner")
     ap.add_argument("out", nargs="?", default="scan.png", help="output file (.pdf .png .jpg .tif)")
-    ap.add_argument("--margin", type=float, default=0.5, help="extra width each side, inches (default 0.5)")
+    st = load_settings()
+    ap.add_argument("--margin", type=float, default=float(st["margin"]),
+                    help=f"extra width each side, inches (default {float(st['margin']):.1f})")
     ap.add_argument("--no-deskew", action="store_true", help="skip straightening and cropping")
-    ap.add_argument("--dpi", type=int, default=200, choices=m40lib.RESOLUTIONS, help="resolution (default 200)")
+    ap.add_argument("--dpi", type=int, default=int(st["resolution"]), choices=m40lib.RESOLUTIONS,
+                    help=f"resolution (default {st['resolution']})")
     a = ap.parse_args(argv)
     sc = m40lib.Scanner()
     try:
@@ -690,11 +791,13 @@ def run_cli(argv):
         sys.exit("Stopped.")
     finally:
         sc.close()
+    import m40_edit
     img = Image.frombytes("RGB", (width, lines), raw)
+    adj = m40_edit.Adjust(**{k: int(st[k]) for k in TONE_KEYS})   # saved default adjustments
     if not a.no_deskew:
-        from m40_deskew import deskew
-        img, _ = deskew(img)
-    save_image(img, a.out, a.dpi)
+        from m40_deskew import analyze
+        adj.angle, adj.box = analyze(img)
+    save_image(m40_edit.apply(img, adj, a.dpi), a.out, a.dpi)
     print("Saved", a.out)
 
 

@@ -16,6 +16,9 @@ how the original Windows software talks to the scanner; see [docs/PROTOCOL.md](d
 - 100–1200 dpi, colour
 - Saves PDF, PNG, JPEG or TIFF; batch mode for feeding a stack of pages
 - Large, touch-friendly controls; drag to pan when zoomed in
+- **Save as default** remembers resolution, format, folder, edge margin, auto-straighten,
+  batch mode and the brightness/white/black/sharpening levels
+  (stored in `~/.config/dumbworks/settings.json`; the command line uses them too)
 - Command-line mode for scripting
 
 ## Running
