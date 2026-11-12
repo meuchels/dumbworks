@@ -85,6 +85,10 @@ def add_menu_entry():
 # ---------------------------------------------------------------------------
 # GUI (Tk): scan -> preview and adjust -> save, like SmartWorks MFP
 # ---------------------------------------------------------------------------
+# Sizes chosen for touch screens: buttons at least ~48 px tall.
+FONT = ("Sans", 14)
+FONT_BOLD = ("Sans", 16, "bold")
+FONT_SMALL = ("Sans", 11)
 PANEL_BG = "#17485a"
 PANEL_FG = "#ffffff"
 BTN_BG = "#5b9bd5"
@@ -113,7 +117,7 @@ def run_gui():
         def __init__(self, root):
             self.root = root
             root.title(APP_TITLE)
-            root.geometry("1180x860")
+            root.geometry("1280x920")
             root.minsize(820, 600)
             self.q = queue.Queue()
             self.cancel = threading.Event()
@@ -133,6 +137,7 @@ def run_gui():
             self.folder = tk.StringVar(value=default_folder())
             self.fmt = tk.StringVar(value="PDF")
             self.margin = tk.DoubleVar(value=0.5)
+            self.margin_text = tk.StringVar(value="0.5")
             self.res = tk.StringVar(value=RES_LABELS[1])
             self.raw_dpi = 200
             self.auto = tk.BooleanVar(value=True)
@@ -143,15 +148,16 @@ def run_gui():
             self.status = tk.StringVar(value="Ready. Press Scan, then feed a page.")
 
             self.build_toolbar()
+            bar = ttk.Frame(root)
+            bar.pack(side="bottom", fill="x", padx=8, pady=(0, 4))
+            ttk.Label(bar, textvariable=self.status, anchor="w").pack(side="left", fill="x", expand=True)
+            self.progress = ttk.Progressbar(bar, mode="determinate", length=220)
+            self.progress.pack(side="right")
+            self.build_savebar()
             body = tk.Frame(root)
             body.pack(fill="both", expand=True)
             self.build_panel(body)
             self.build_canvas(body)
-            bar = ttk.Frame(root)
-            bar.pack(fill="x", padx=6, pady=3)
-            ttk.Label(bar, textvariable=self.status, anchor="w").pack(side="left", fill="x", expand=True)
-            self.progress = ttk.Progressbar(bar, mode="determinate", length=220)
-            self.progress.pack(side="right")
 
             root.protocol("WM_DELETE_WINDOW", self.on_close)
             root.bind("<Control-s>", lambda e: self.on_save())
@@ -161,30 +167,56 @@ def run_gui():
         # ---------------- layout ----------------
         def build_toolbar(self):
             top = ttk.Frame(self.root)
-            top.pack(fill="x", padx=6, pady=5)
-            self.scan_btn = ttk.Button(top, text="Scan", command=self.on_scan, width=10)
+            top.pack(fill="x", padx=8, pady=(8, 2))
+            top2 = ttk.Frame(self.root)
+            top2.pack(fill="x", padx=8, pady=(2, 8))
+            self.scan_btn = ttk.Button(top, text="Scan", command=self.on_scan, width=10, style="Big.TButton")
             self.scan_btn.pack(side="left")
-            self.stop_btn = ttk.Button(top, text="Stop", command=self.on_stop, state="disabled")
-            self.stop_btn.pack(side="left", padx=4)
-            ttk.Label(top, text="Resolution:").pack(side="left", padx=(10, 2))
+            self.stop_btn = ttk.Button(top, text="Stop", command=self.on_stop, state="disabled", width=8,
+                                       style="Big.TButton")
+            self.stop_btn.pack(side="left", padx=8)
+            ttk.Label(top, text="Resolution:").pack(side="left", padx=(20, 6))
             ttk.Combobox(top, textvariable=self.res, values=RES_LABELS, state="readonly",
-                         width=16).pack(side="left")
-            ttk.Checkbutton(top, text="Auto straighten", variable=self.auto).pack(side="left", padx=8)
-            ttk.Checkbutton(top, text="Batch (no preview)",
+                         width=16, font=FONT).pack(side="left", ipady=6)
+            ttk.Checkbutton(top2, text="Auto straighten", variable=self.auto).pack(side="left", padx=(0, 20))
+            ttk.Button(top2, text="Reset adjustments", command=self.on_reset).pack(side="left", padx=(0, 20))
+            ttk.Checkbutton(top2, text="Batch (no preview)",
                             variable=self.quick).pack(side="left", padx=4)
-            mb = ttk.Menubutton(top, text="Setup")
-            menu = tk.Menu(mb, tearoff=False)
+            mb = ttk.Menubutton(top, text="Setup", style="Big.TMenubutton")
+            menu = tk.Menu(mb, tearoff=False, font=FONT)
             menu.add_command(label="Fix USB permission (asks for admin password)", command=self.on_fix_perm)
             menu.add_command(label="Add to applications menu", command=self.on_menu_entry)
             mb["menu"] = menu
             mb.pack(side="right")
-            ttk.Spinbox(top, from_=0.1, to=3.0, increment=0.1, textvariable=self.margin,
-                        width=4).pack(side="right")
-            ttk.Label(top, text="Margin (in):").pack(side="right", padx=(10, 2))
+            ttk.Button(top2, text="+", width=3, command=lambda: self.bump_margin(0.1)).pack(side="right")
+            ttk.Label(top2, textvariable=self.margin_text, width=5, anchor="center").pack(side="right")
+            ttk.Button(top2, text="-", width=3, command=lambda: self.bump_margin(-0.1)).pack(side="right")
+            ttk.Label(top2, text="Edge margin (in):").pack(side="right", padx=(10, 6))
 
+
+        def build_savebar(self):
+            f = ttk.Frame(self.root)
+            f.pack(side="bottom", fill="x", padx=8, pady=8)
+            ttk.Label(f, text="File:").pack(side="left")
+            ttk.Entry(f, textvariable=self.filename, font=FONT, width=24).pack(side="left", padx=6, ipady=8)
+            ttk.Combobox(f, textvariable=self.fmt, values=[x[0] for x in FORMATS], state="readonly",
+                         width=6, font=FONT).pack(side="left", ipady=6)
+            ttk.Button(f, text="Folder...", command=self.on_browse).pack(side="left", padx=(12, 4))
+            ttk.Button(f, text="Open folder", command=self.on_open_folder).pack(side="left", padx=4)
+            self.save_btn = tk.Button(f, text="Save", command=self.on_save, bg="#2e9e5b", fg="white",
+                                      activebackground="#41b870", relief="flat", font=("Sans", 18, "bold"),
+                                      padx=40, pady=8)
+            self.save_btn.pack(side="right")
+            ttk.Label(f, textvariable=self.folder, foreground="#555", font=FONT_SMALL).pack(
+                side="left", padx=10, fill="x", expand=True)
+
+        def bump_margin(self, d):
+            v = round(min(3.0, max(0.1, float(self.margin.get()) + d)), 1)
+            self.margin.set(v)
+            self.margin_text.set(f"{v:.1f}")
 
         def build_panel(self, parent):
-            p = tk.Frame(parent, bg=PANEL_BG, width=290)
+            p = tk.Frame(parent, bg=PANEL_BG, width=360)
             p.pack(side="right", fill="y")
             p.pack_propagate(False)
             self.panel = p
@@ -192,16 +224,17 @@ def run_gui():
 
             def btn(parent, text, cmd, width=3):
                 return tk.Button(parent, text=text, command=cmd, width=width, bg=BTN_BG, fg="white",
-                                 activebackground="#7fb3e0", relief="flat", font=("Sans", 13, "bold"))
+                                 activebackground="#7fb3e0", relief="flat", font=FONT_BOLD,
+                                 padx=8, pady=9)
 
             def caption(text):
-                tk.Label(p, text=text, bg=PANEL_BG, fg=PANEL_FG, font=("Sans", 10)).pack(pady=(0, 6))
+                tk.Label(p, text=text, bg=PANEL_BG, fg=PANEL_FG, font=FONT_SMALL).pack(pady=(1, 4))
 
             def stepper(key, label, minus="-", plus="+"):
                 row = tk.Frame(p, bg=PANEL_BG)
                 row.pack(pady=(8, 0))
                 btn(row, minus, lambda: self.step(key, -1)).pack(side="left")
-                v = tk.Label(row, text="", width=10, bg=PANEL_BG, fg=PANEL_FG, font=("Sans", 11))
+                v = tk.Label(row, text="", width=9, bg=PANEL_BG, fg=PANEL_FG, font=FONT)
                 v.pack(side="left", padx=6)
                 btn(row, plus, lambda: self.step(key, +1)).pack(side="left")
                 self.value_labels[key] = v
@@ -215,7 +248,7 @@ def run_gui():
             row = tk.Frame(p, bg=PANEL_BG)
             row.pack(pady=(8, 0))
             btn(row, "<", lambda: self.rotate_by(-0.1)).pack(side="left")
-            v = tk.Label(row, text="", width=10, bg=PANEL_BG, fg=PANEL_FG, font=("Sans", 11))
+            v = tk.Label(row, text="", width=9, bg=PANEL_BG, fg=PANEL_FG, font=FONT)
             v.pack(side="left", padx=6)
             btn(row, ">", lambda: self.rotate_by(+0.1)).pack(side="left")
             self.value_labels["angle"] = v
@@ -244,24 +277,7 @@ def run_gui():
             btn(row, "+", lambda: self.set_zoom(self.zoom * 1.5)).pack(side="left", padx=3)
             caption("Zoom")
 
-            btn(p, "Reset adjustments", self.on_reset, width=18).pack(pady=(2, 10))
 
-            f = tk.Frame(p, bg=PANEL_BG)
-            f.pack(side="bottom", fill="x", padx=10, pady=10)
-            tk.Label(f, text="File:", bg=PANEL_BG, fg=PANEL_FG, anchor="w").pack(fill="x")
-            ttk.Entry(f, textvariable=self.filename).pack(fill="x")
-            r2 = tk.Frame(f, bg=PANEL_BG)
-            r2.pack(fill="x", pady=4)
-            ttk.Combobox(r2, textvariable=self.fmt, values=[x[0] for x in FORMATS], state="readonly",
-                         width=6).pack(side="left")
-            self.fmt.trace_add("write", lambda *_: None)
-            ttk.Button(r2, text="Folder...", command=self.on_browse).pack(side="right")
-            tk.Label(f, textvariable=self.folder, bg=PANEL_BG, fg="#bcd", anchor="w",
-                     font=("Sans", 8), wraplength=260, justify="left").pack(fill="x")
-            self.save_btn = tk.Button(f, text="Save", command=self.on_save, bg="#2e9e5b", fg="white",
-                                      activebackground="#41b870", relief="flat", font=("Sans", 13, "bold"))
-            self.save_btn.pack(fill="x", pady=(8, 0))
-            ttk.Button(f, text="Open folder", command=self.on_open_folder).pack(fill="x", pady=(4, 0))
 
         def build_canvas(self, parent):
             frame = tk.Frame(parent)
@@ -361,11 +377,18 @@ def run_gui():
             self.render()
 
         def on_press(self, e):
+            if not self.crop_mode:
+                self.canvas.scan_mark(e.x, e.y)   # drag to pan when zoomed in
+                return
             if self.crop_mode and self.view:
                 self.crop_start = (self.canvas.canvasx(e.x), self.canvas.canvasy(e.y))
                 self.canvas.delete("croprect")
 
         def on_drag(self, e):
+            if not self.crop_mode:
+                if self.zoom > 1.0:
+                    self.canvas.scan_dragto(e.x, e.y, gain=1)
+                return
             if self.crop_mode and self.crop_start:
                 x0, y0 = self.crop_start
                 self.canvas.delete("croprect")
@@ -618,10 +641,22 @@ def run_gui():
             self.root.destroy()
 
     root = tk.Tk()
+    style = ttk.Style(root)
     try:
-        ttk.Style(root).theme_use("clam")
+        style.theme_use("clam")
     except tk.TclError:
         pass
+    root.option_add("*Font", FONT)
+    root.option_add("*TCombobox*Listbox.font", FONT)
+    style.configure(".", font=FONT)
+    style.configure("TButton", padding=(12, 8))
+    style.configure("Big.TButton", font=FONT_BOLD, padding=(18, 12))
+    style.configure("Big.TMenubutton", font=FONT_BOLD, padding=(14, 10))
+    style.configure("TCheckbutton", padding=(4, 8), indicatorsize=22)
+    style.configure("TCombobox", arrowsize=26, padding=4)
+    style.configure("Vertical.TScrollbar", arrowsize=24)
+    style.configure("Horizontal.TScrollbar", arrowsize=24)
+    style.configure("TProgressbar", thickness=18)
     root.app = App(root)
     root.mainloop()
 

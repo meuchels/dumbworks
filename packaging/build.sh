@@ -1,6 +1,7 @@
 #!/bin/sh
 # Build dist/m40scan-x86_64: one self-contained executable (Python, Tk, Pillow, numpy, libusb).
-# Uses micromamba + conda-forge so the bundle only needs glibc 2.17 and the system X11/udev libs.
+# Uses micromamba + conda-forge so the bundle only needs glibc 2.17 and the system X11/Xft/udev libs.
+# The Xft build of Tk is used so fonts are scalable (needed for the large touch-friendly UI).
 set -e
 cd "$(dirname "$0")"
 WORK="${WORK:-$PWD/.build}"
@@ -11,7 +12,7 @@ fi
 export MAMBA_ROOT_PREFIX="$WORK/root"
 if [ ! -x "$WORK/env/bin/python" ]; then
     "$WORK/bin/micromamba" create -y -p "$WORK/env" -c conda-forge \
-        python=3.12 tk pillow numpy pyinstaller pyusb libusb
+        python=3.12 "tk=8.6.*=xft*" pillow numpy pyinstaller pyusb libusb
 fi
 mkdir -p "$WORK/libs"
 cp -L "$WORK/env/lib/libusb-1.0.so.0" "$WORK/libs/libusb-1.0.so.0"

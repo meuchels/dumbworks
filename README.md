@@ -15,6 +15,7 @@ how the original Windows software talks to the scanner; see [docs/PROTOCOL.md](d
 - Automatic straightening and cropping of crooked pages
 - 100–1200 dpi, colour
 - Saves PDF, PNG, JPEG or TIFF; batch mode for feeding a stack of pages
+- Large, touch-friendly controls; drag to pan when zoomed in
 - Command-line mode for scripting
 
 ## Running
@@ -28,7 +29,7 @@ chmod +x m40scan-x86_64
 ```
 
 It is a single self-contained executable for 64-bit x86 Linux (glibc 2.17 or newer,
-X11/XWayland desktop). Nothing to install.
+X11/XWayland desktop with the usual libX11, libXft and fontconfig). Nothing to install.
 
 ### USB permission
 
