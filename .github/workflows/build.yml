@@ -16,10 +16,10 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Cache build environment
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: packaging/.build/env
           key: env-${{ hashFiles('packaging/build.sh') }}
@@ -28,14 +28,14 @@ jobs:
         run: packaging/build.sh
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: m40scan-x86_64
           path: dist/m40scan-x86_64
 
       - name: Release
         if: startsWith(github.ref, 'refs/tags/v')
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           files: dist/m40scan-x86_64
           prerelease: true
